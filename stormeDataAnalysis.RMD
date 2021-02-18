@@ -1,0 +1,215 @@
+---
+title: "Storm Data Analysis"
+author: "EzzahraFatmaMHD"
+date: "2/18/2021"
+output: html_document
+---
+### Impact of Severe **Weather** Events on **Population Health** and **Economic life**.  
+
+#### Coursera Reproducible Research - Week 4 - Project 2  
+
+# Introduction  
+
+This project explores the **NOAA storm database**, which tracks major storms and weather events, to explore the most severe types of weather events in the USA causing the greatest damage to the human life in term of injuries  and the economic life during the years 1950 - 2011.   
+
+There are two goals of this analysis:   
+
+ *identify the weather events that are most harmful with respect to population health   
+ *identify the weather events that have the greatest economic consequences.  
+ 
+# synopsis  
+
+The NOAA database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. This project looks at severe weather events can cause both public health and economic problems.   
+
+The analysi starts by extracting the needing features from the database : only the variables we need to our analysis. The processing the data to find which events affect more the poeple health and the economy.   
+
+# Questions     
+
+This data analysis must address the following questions:  
+
+  1. Across the United States, which types of events (as indicated in the EVTYPE variable) are      most harmful with respect to population health?  
+  2. Across the United States, which types of events have the greatest economic consequences?  
+  
+  
+# Data Analysis  
+
+## Data processing  
+
+### Preparing work enviroment  
+
+
+```{r}
+library("tidyverse")
+library("data.table")
+library("dplyr")
+library("ggplot2")
+library("gridExtra")
+library("gridtext")
+library("grid")
+  
+
+```  
+
+   
+### Loading Data  
+
+The data for this assignment come in the form of a comma-separated-value file compressed via the bzip2 algorithm to reduce its size. You can download the file from the course web site.  
+
+```{r}
+data<- read.csv("D:/data science/02-Data Science Specialization with R (John hopkins uni)/05-Reproductible/week 4 project/repdata_data_StormData.csv.bz2") #load data
+dataT <- as.data.table(data) # convert dataframe to datatable
+```  
+
+### Extracting necessary data  
+
+The events in the database start in the year 1950 and end in November 2011.  
+
+In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.  
+
+According to NOAA, the data recording start from Jan. 1950. At that time, they recorded only one event type - tornado. They added more events gradually, and only from Jan 1996 they started recording all events type. Since our objective is comparing the effects of different weather events, we need only to include events after 1995.  
+
+
+```{r}
+#dataT$BGN_DATE <- strptime(dataT$BGN_DATE, "%m/%d/%Y %H:%M:%S")
+dataT <- subset(dataT, BGN_DATE > "1995-12-31")
+names <- names(dataT)
+names
+```  
+  
+  
+Based on the documentation and preliminary exploration of the data we can conclude that there are 7 variables we are interested in regarding the two questions.  
+
+```{r}
+dataT<- subset(dataT, select = c(EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, 
+                                 CROPDMG, CROPDMGEXP))
+```  
+
+ *EVTYPE – type of event  
+ *FATALITIES – number of fatalities  
+ 
+ *INJURIES – number of injuries  
+ 
+ *PROPDMG – the size of property damage  
+ 
+ *PROPDMGEXP - the exponent values for ‘PROPDMG’ (property damage)  
+ 
+ *CROPDMG - the size of crop damage  
+ 
+ *CROPDMGEXP - the exponent values for ‘CROPDMG’ (crop damage)  
+ 
+```{r}
+head(unique(dataT$EVTYPE))
+```  
+  
+  
+
+# Question 1  
+
+**Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?**  
+
+
+```{r}
+populationhealth<- aggregate(cbind(FATALITIES,INJURIES)~EVTYPE, data = dataT, sum, na.rm=TRUE)
+populationhealth<- arrange(populationhealth, desc(FATALITIES+INJURIES))
+head(populationhealth, 10)
+
+#Aggregate fatalities ad injuries by Event Type
+fatalities <- aggregate(FATALITIES ~ EVTYPE, data=dataT, sum)
+injuries <- aggregate(INJURIES ~ EVTYPE, data=dataT, sum)
+
+#Arrange in descending order by Event Type by number of fatalities or injuries
+fatalities <- arrange(fatalities,desc(FATALITIES),EVTYPE)[1:10,]
+injuries <- arrange(injuries,desc(INJURIES),EVTYPE)[1:10,]
+
+#convert event type variable to factor for analysis
+fatalities$EVTYPE <- factor(fatalities$EVTYPE, levels = fatalities$EVTYPE)
+injuries$EVTYPE <- factor(injuries$EVTYPE, levels = injuries$EVTYPE)
+
+#Show plot of fatalities by Event Type
+fatalitiesbyweather <- ggplot(fatalities, aes(x = EVTYPE, y = FATALITIES)) + 
+  geom_bar(stat = "identity", fill = "blue", width = NULL) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  xlab("Event Type") + ylab("Fatalities") 
+#Show plot of injuries by Event Type
+injuriesbyweather <- ggplot(injuries, aes(x = EVTYPE, y = INJURIES)) + 
+  geom_bar(stat = "identity", fill = "blue", width = NULL) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  xlab("Event Type") + ylab("Injuries") 
+```  
+  
+  
+
+# Question 2  
+
+**Across the United States, which types of events have the greatest economic consequences?**  
+
+The number/letter in the exponent value columns (PROPDMGEXP and CROPDMGEXP) represents the power of ten (10^The number).  
+
+It means that the total size of damage is the product of PROPDMG and CROPDMG and figure 10 in the power corresponding to exponent value.  
+
+Exponent values are:  
+
+- numbers from one to ten  
+
+-letters (B or b = Billion, M or m = Million, K or k = Thousand, H or h = Hundred)  
+
+- symbols “-”, “+” and “?” which refers to less than, greater than and low certainty.  
+
+```{r}
+dataT$PROPDMGEXP <- gsub("[Hh]", "2", dataT$PROPDMGEXP)
+dataT$PROPDMGEXP <- gsub("[Kk]", "3", dataT$PROPDMGEXP)
+dataT$PROPDMGEXP <- gsub("[Mm]", "6", dataT$PROPDMGEXP)
+dataT$PROPDMGEXPP <- gsub("[Bb]", "9", dataT$PROPDMGEXP)
+dataT$PROPDMGEXP <- gsub("\\+", "1", dataT$PROPDMGEXP)
+dataT$PROPDMGEXP <- gsub("\\?|\\-|\\ ", "0",  dataT$PROPDMGEXP)
+dataT$PROPDMGEXP <- as.numeric(dataT$PROPDMGEXP)
+
+dataT$CROPDMGEXP <- gsub("[Hh]", "2", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- gsub("[Kk]", "3", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- gsub("[Mm]", "6", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- gsub("[Bb]", "9", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- gsub("\\+", "1", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- gsub("\\-|\\?|\\ ", "0", dataT$CROPDMGEXP)
+dataT$CROPDMGEXP <- as.numeric(dataT$CROPDMGEXP)
+
+dataT$PROPDMGEXP[is.na(dataT$PROPDMGEXP)] <- 0
+dataT$CROPDMGEXP[is.na(dataT$CROPDMGEXP)] <- 0
+
+dataT<- mutate(dataT, 
+                    PROPDMGTOTAL = PROPDMG * (10 ^ PROPDMGEXP), 
+                    CROPDMGTOTAL = CROPDMG * (10 ^ CROPDMGEXP))
+Economic_data <- aggregate(cbind(PROPDMGTOTAL, CROPDMGTOTAL) ~ EVTYPE, data = dataT, FUN=sum)
+Economic_data$ECONOMIC_LOSS <- Economic_data$PROPDMGTOTAL + Economic_data$CROPDMGTOTAL
+Economic_data <- Economic_data[order(Economic_data$ECONOMIC_LOSS, decreasing = TRUE), ]
+
+Top10_events_economy <- Economic_data[1:10,]
+#plotting economic loss
+g <- ggplot(data = Top10_events_economy, aes(x = reorder(EVTYPE, ECONOMIC_LOSS), y = ECONOMIC_LOSS))
+g <- g + geom_bar(stat = "identity", colour = "black")
+g <- g + labs(title = "Total economic loss in USA by weather events in 1996-2011")
+g <- g + theme(plot.title = element_text(hjust = 0.5))
+g <- g + labs(y = "Size of property and crop loss", x = "Event Type")
+g <- g + coord_flip()
+
+head(Economic_data, 10)
+```  
+  
+  
+ 
+# Results  
+
+```{r}
+grid.arrange(fatalitiesbyweather, injuriesbyweather, ncol=2, nrow=1,
+             top = textGrob("Public Health Impact - Fatalities & Injuries from top 10 Weather Events",gp=gpar(fontsize=14,font=3)))
+```  
+  
+  
+This plot show that TORNADOS, EXCESSIVE HEAT, flash flood and FLOOD are the main contributors to deaths and injuries out of all event types of weather events.  
+
+```{r}
+print(g)
+```  
+  
+  
+
+Analyzing economic impact on the graph one can conclude that FLOOD, Tornado and flash flood are the main contributors to severe economic consequences out of all event types of weather events.  
